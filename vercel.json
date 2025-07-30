@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "frontend/api/app.py": {
+      "maxDuration": 500,
+      "runtime": "python3.9"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/frontend/api/app.py"
+    }
+  ]
+} 

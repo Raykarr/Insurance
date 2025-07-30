@@ -1,16 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/app.py"
-    }
-  ],
-  "functions": {
-    "api/app.py": {
-      "maxDuration": 300
-    }
-  }
+  "framework": "vite"
 }
