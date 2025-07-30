@@ -77,9 +77,9 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     logger.warning("⚠️ Supabase credentials not set. Database operations will be disabled.")
 
-# Create uploads directory
-UPLOADS_DIR = Path("uploads")
-UPLOADS_DIR.mkdir(exist_ok=True)
+# Vercel serverless functions have read-only file system
+# We'll store files in database instead
+UPLOADS_DIR = None
 
 
 # --- Production-Ready Core Functions ---
@@ -549,7 +549,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Static files mounting disabled for Vercel deployment
+# app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Pydantic Models ---
 
@@ -604,9 +605,8 @@ async def ingest(background_tasks: BackgroundTasks, file: UploadFile = File(...)
                 await save_document_metadata(doc_id, file.filename, page_count_temp)
 
 
-        pdf_path = UPLOADS_DIR / f"{doc_id}.pdf"
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_bytes)
+        # Process PDF directly without saving to disk (Vercel read-only file system)
+        # pdf_bytes will be processed directly without saving to disk
         
         text_blocks = await extract_text_with_coordinates(pdf_bytes)
         page_count = max(b['page_num'] for b in text_blocks) if text_blocks else 0
@@ -677,11 +677,8 @@ async def get_findings(document_id: str):
 
 @app.get("/documents/{document_id}/pdf")
 async def get_pdf(document_id: str):
-    """Serve the uploaded PDF file."""
-    pdf_path = UPLOADS_DIR / f"{document_id}.pdf"
-    if not pdf_path.exists():
-        raise HTTPException(404, "PDF file not found.")
-    return FileResponse(pdf_path, media_type="application/pdf")
+    """PDF serving disabled in Vercel deployment due to read-only file system."""
+    raise HTTPException(404, "PDF serving not available in serverless deployment.")
 
 @app.get("/progress/{document_id}")
 async def get_processing_progress(document_id: str):
