@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-insurance-document-analyzer-z7vbrtlu2-raykarrs-projects.vercel.app/';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-insurance-document-analyzer.vercel.app/';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
