@@ -583,9 +583,19 @@ async def root():
 @app.post("/ingest", response_model=IngestResponse)
 async def ingest(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     try:
+        # Vercel serverless functions have 4.5MB request body limit
+        MAX_FILE_SIZE = 4.4 * 1024 * 1024  # 4.4MB to be safe
+        
         pdf_bytes = await file.read()
         if not pdf_bytes:
             raise HTTPException(400, "Empty file received.")
+        
+        # Check file size before processing
+        if len(pdf_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB. Your file is {len(pdf_bytes) // (1024*1024)}MB."
+            )
         
         doc_id = hashlib.sha256(pdf_bytes).hexdigest()
         

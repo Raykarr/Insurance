@@ -26,10 +26,13 @@ const Index = () => {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    // Vercel serverless functions have 4.5MB request body limit
+    const MAX_FILE_SIZE = 4.4 * 1024 * 1024; // 4.4MB to be safe
+    
+    if (file.size > MAX_FILE_SIZE) {
       toast({
         title: "File too large",
-        description: "Please upload a file smaller than 10MB",
+        description: `Please upload a file smaller than ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(1)}MB due to deployment limits`,
         variant: "destructive",
       });
       return;
@@ -146,7 +149,7 @@ const Index = () => {
                     {isDragOver ? 'Drop your PDF here' : 'Drag & drop your insurance policy PDF here'}
                   </p>
                   <p className="text-lg text-muted-foreground/70">
-                    Supported format: PDF | Maximum file size: 10MB
+                    Supported format: PDF | Maximum file size: 4.4MB
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
