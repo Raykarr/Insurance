@@ -3,7 +3,7 @@ uvicorn[standard]
 PyMuPDF
 groq
 requests
-pinecone-client
+pinecone
 supabase
 python-dotenv
 loguru
