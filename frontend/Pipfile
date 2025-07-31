@@ -1,0 +1,23 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "==0.104.1"
+uvicorn = {extras = ["standard"], version = "==0.24.0"}
+PyMuPDF = "==1.23.8"
+groq = "==0.4.2"
+requests = "==2.31.0"
+pinecone-client = "==2.2.4"
+supabase = "==2.0.2"
+python-dotenv = "==1.0.0"
+loguru = "==0.7.2"
+tiktoken = "==0.5.1"
+pydantic = "==2.5.0"
+python-multipart = "==0.0.6"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9" 
