@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Use environment variable for API URL, fallback to Vercel deployment URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-insurance-document-analyzer.vercel.app/api';
+// Use environment variable for API URL, fallback to local development URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7860';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -43,12 +43,19 @@ export interface ChatResponse {
 
 export const apiService = {
   async uploadDocument(file: File): Promise<IngestResponse> {
+    console.log(`📤 [API] Uploading file: ${file.name} (${file.size} bytes) to ${API_BASE_URL}/ingest`);
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post<IngestResponse>('/ingest', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
+    try {
+      const response = await api.post<IngestResponse>('/ingest', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      console.log(`✅ [API] Upload successful:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ [API] Upload failed:`, error);
+      throw error;
+    }
   },
 
   async getAnalysisStatus(documentId: string): Promise<AnalysisStatus> {
@@ -72,8 +79,15 @@ export const apiService = {
   },
 
   async healthCheck(): Promise<{ status: string }> {
-    const response = await api.get<{ status: string }>('/health');
-    return response.data;
+    console.log(`🔍 [API] Checking health at ${API_BASE_URL}/health`);
+    try {
+      const response = await api.get<{ status: string }>('/health');
+      console.log(`✅ [API] Health check successful:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ [API] Health check failed:`, error);
+      throw error;
+    }
   },
 
   async getProgress(documentId: string): Promise<{

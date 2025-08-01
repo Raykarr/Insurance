@@ -77,9 +77,9 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     logger.warning("⚠️ Supabase credentials not set. Database operations will be disabled.")
 
-# Vercel serverless functions have read-only file system
-# We'll store files in database instead
-UPLOADS_DIR = None
+# Local file storage for PDFs
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
 
 
 # --- Production-Ready Core Functions ---
@@ -269,7 +269,7 @@ async def analyze_chunk_for_concerns(llm: Groq, chunk: Dict[str, Any]) -> Option
         response = await asyncio.to_thread(
             llm.chat.completions.create,
             messages=[{"role": "user", "content": prompt}],
-            model="llama‑3.1‑70b‑versatile",
+            model="llama-3.1-8b-instant",
             temperature=0.0,
             max_tokens=350,
         )
@@ -319,6 +319,42 @@ def clean_llm_response(response: str) -> str:
     
     # Standardize whitespace
     response = re.sub(r'\n\s*\n+', '\n', response.strip())
+    
+    return response
+
+def clean_chat_response(response: str) -> str:
+    """Clean chat responses to remove reasoning and improve formatting."""
+    import re
+    
+    # Remove thinking/reasoning sections
+    response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL | re.IGNORECASE)
+    response = re.sub(r'<reasoning>.*?</reasoning>', '', response, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove lines that start with thinking indicators
+    lines = response.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        line_lower = line.strip().lower()
+        # Skip lines that are clearly reasoning/thinking
+        if any(phrase in line_lower for phrase in [
+            "let me think", "i need to", "first,", "next,", "i should", "i will",
+            "okay,", "so,", "well,", "hmm,", "let me", "i'll", "i'm going to"
+        ]):
+            continue
+        # Skip empty lines
+        if not line.strip():
+            continue
+        cleaned_lines.append(line)
+    
+    # Join lines and clean up formatting
+    response = '\n'.join(cleaned_lines)
+    
+    # Remove excessive whitespace
+    response = re.sub(r'\n\s*\n+', '\n\n', response.strip())
+    
+    # If response is too short, return a simple message
+    if len(response.strip()) < 10:
+        return "I don't have enough information to answer that question based on the current finding."
     
     return response
 
@@ -582,6 +618,7 @@ async def root():
 
 @app.post("/ingest", response_model=IngestResponse)
 async def ingest(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    logger.info(f"📤 Ingest request received for file: {file.filename} ({file.size} bytes)")
     try:
         # Vercel serverless functions have 4.5MB request body limit
         MAX_FILE_SIZE = 4.4 * 1024 * 1024  # 4.4MB to be safe
@@ -615,8 +652,11 @@ async def ingest(background_tasks: BackgroundTasks, file: UploadFile = File(...)
                 await save_document_metadata(doc_id, file.filename, page_count_temp)
 
 
-        # Process PDF directly without saving to disk (Vercel read-only file system)
-        # pdf_bytes will be processed directly without saving to disk
+        # Save PDF to local storage for serving
+        pdf_path = UPLOADS_DIR / f"{doc_id}.pdf"
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        logger.info(f"✅ PDF saved to: {pdf_path}")
         
         text_blocks = await extract_text_with_coordinates(pdf_bytes)
         page_count = max(b['page_num'] for b in text_blocks) if text_blocks else 0
@@ -687,8 +727,38 @@ async def get_findings(document_id: str):
 
 @app.get("/documents/{document_id}/pdf")
 async def get_pdf(document_id: str):
-    """PDF serving disabled in Vercel deployment due to read-only file system."""
-    raise HTTPException(404, "PDF serving not available in serverless deployment.")
+    """Serve PDF file for document viewer."""
+    logger.info(f"📄 PDF request for document: {document_id}")
+    
+    try:
+        # Check if PDF file exists locally
+        pdf_path = UPLOADS_DIR / f"{document_id}.pdf"
+        if not pdf_path.exists():
+            raise HTTPException(404, "PDF file not found.")
+        
+        # Get document metadata for filename
+        filename = document_id
+        if supabase_client:
+            try:
+                doc_response = supabase_client.table('documents').select('filename').eq('id', document_id).execute()
+                if doc_response.data:
+                    filename = doc_response.data[0]['filename']
+            except Exception as e:
+                logger.warning(f"⚠️ Could not get filename from database: {e}")
+        
+        # Serve the PDF file for inline viewing
+        return FileResponse(
+            path=pdf_path,
+            filename=filename,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "inline"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ PDF serving error for {document_id}: {e}")
+        raise HTTPException(500, "Failed to serve PDF.")
 
 @app.get("/progress/{document_id}")
 async def get_processing_progress(document_id: str):
@@ -728,6 +798,7 @@ async def get_processing_progress(document_id: str):
 
 @app.get("/health")
 async def health_check():
+    logger.info("🔍 Health check requested")
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -762,6 +833,10 @@ async def contextual_chat(finding_id: int, request: Dict[str, str]):
         prompt = f"""
         You are an expert insurance policy analyst. Answer the user's question about this specific finding.
         
+        IMPORTANT: Provide ONLY a direct, helpful answer. 
+        Do NOT include any reasoning, thinking process, or meta-commentary. 
+        Give a clear, concise response that directly addresses the user's question.
+        
         Context:
         - Text Content: {finding['text_content']}
         - Finding: {finding['summary']}
@@ -771,19 +846,23 @@ async def contextual_chat(finding_id: int, request: Dict[str, str]):
         
         Question: {request.get('q', '')}
         
-        Provide a helpful, accurate answer based on the finding context above.
+        Answer the question directly and helpfully, using the context provided.
         """
         
         response = await asyncio.to_thread(
             llm.chat.completions.create,
             messages=[{"role": "user", "content": prompt}],
-            model="llama‑3.1‑70b‑versatile",
+            model="llama-3.1-8b-instant",
             temperature=0.1,
             max_tokens=500,
         )
         
+        # Clean the response to remove reasoning and improve formatting
+        answer = response.choices[0].message.content
+        answer = clean_chat_response(answer)
+        
         return {
-            "answer": response.choices[0].message.content,
+            "answer": answer,
             "finding_id": finding_id,
             "context": {
                 "category": finding['category'],
@@ -798,6 +877,7 @@ async def contextual_chat(finding_id: int, request: Dict[str, str]):
         logger.error(f"❌ Chat error for finding {finding_id}: {e}")
         raise HTTPException(500, f"Chat failed: {str(e)}")
 
+# --- Hugging Face Spaces Entry Point ---
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=7860) 

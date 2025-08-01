@@ -20,7 +20,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ documentId, selectedFinding, find
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const pdfUrl = `http://localhost:8000/documents/${documentId}/pdf`;
+  const pdfUrl = `http://localhost:7860/documents/${documentId}/pdf#view=FitH&toolbar=1`;
 
   useEffect(() => {
     if (documentId) {
@@ -56,7 +56,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ documentId, selectedFinding, find
   };
 
   const handleViewInNewTab = () => {
-    window.open(pdfUrl, '_blank');
+    // Force reload the PDF viewer
+    setLoading(true);
+    setError(null);
+    
+    // Small delay to show loading state
+    setTimeout(() => {
+      setLoading(false);
+    }, 500);
   };
 
   const handleEmbeddedView = () => {
@@ -103,7 +110,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ documentId, selectedFinding, find
       </CardHeader>
       <CardContent className="flex flex-col h-full">
         {/* PDF Display */}
-        <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+        <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 pdf-container" style={{ minHeight: '600px' }}>
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -147,18 +154,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ documentId, selectedFinding, find
             </div>
           ) : (
             <div className="h-full">
-              <object
-                data={pdfUrl}
-                type="application/pdf"
-                className="w-full h-full min-h-96"
+              <iframe
+                src={pdfUrl}
+                className="w-full h-full min-h-[600px]"
                 onLoad={() => setLoading(false)}
                 onError={() => {
                   setError('Failed to load PDF');
                   setLoading(false);
                 }}
-              >
-                <p>Your browser does not support PDFs. Please download the PDF to view it.</p>
-              </object>
+                style={{ border: 'none' }}
+              />
             </div>
           )}
         </div>
