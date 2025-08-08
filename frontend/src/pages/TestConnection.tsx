@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import apiService from '../lib/api';
+import apiService, { API_BASE_URL } from '../lib/api';
 
 const TestConnection: React.FC = () => {
   const { toast } = useToast();
@@ -46,7 +46,7 @@ const TestConnection: React.FC = () => {
             <div className="p-4 bg-gray-100 rounded-lg">
               <p className="font-semibold">Status: {status}</p>
               <p className="text-sm text-gray-600 mt-2">
-                Backend URL: http://localhost:8000
+                Backend URL: {API_BASE_URL}
               </p>
             </div>
             

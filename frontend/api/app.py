@@ -77,9 +77,33 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     logger.warning("⚠️ Supabase credentials not set. Database operations will be disabled.")
 
-# Local file storage for PDFs
-UPLOADS_DIR = Path(__file__).parent / "uploads"
-UPLOADS_DIR.mkdir(exist_ok=True)
+# Local file storage for PDFs (robust for restricted environments like HF Spaces)
+# Prefer env var if provided; else try local folder; fall back to /tmp/uploads when not writeable
+def _resolve_uploads_dir() -> Path:
+    candidate = os.getenv("UPLOADS_DIR")
+    if candidate:
+        path = Path(candidate)
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        except Exception as e:
+            logger.warning(f"⚠️ Could not create UPLOADS_DIR at {path}: {e}. Falling back to defaults.")
+
+    # Try relative to app directory
+    try:
+        local_path = Path(__file__).parent / "uploads"
+        local_path.mkdir(parents=True, exist_ok=True)
+        return local_path
+    except Exception as e:
+        logger.warning(f"⚠️ Cannot create local uploads dir at {local_path}: {e}. Using /tmp/uploads.")
+
+    # Final fallback: /tmp (always writeable in most PaaS)
+    tmp_path = Path("/tmp/uploads")
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    return tmp_path
+
+UPLOADS_DIR = _resolve_uploads_dir()
+logger.info(f"📁 Using uploads directory: {UPLOADS_DIR}")
 
 
 # --- Production-Ready Core Functions ---

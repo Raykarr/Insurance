@@ -1,7 +1,16 @@
 import axios from 'axios';
 
-// Use environment variable for API URL, fallback to local development URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7860';
+// Determine sensible default base URL
+// Priority:
+// 1) VITE_API_URL env var if provided
+// 2) If running on Vercel (or any hosted env) without env set, use the deployed HF Space URL
+// 3) Otherwise default to local dev FastAPI
+const inferredDefaultBaseUrl =
+  typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')
+    ? 'https://raykarr-insurance-document-analyzer-api.hf.space'
+    : 'http://localhost:7860';
+
+export const API_BASE_URL = import.meta.env.VITE_API_URL || inferredDefaultBaseUrl;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
